@@ -2,7 +2,7 @@
   "name": "sus",
   "version": "0.1.0",
   "bin": {
-    "sus": "bin/sus.js"
+    "sus": "cdk/sus.js"
   },
   "scripts": {
     "build": "tsc",
