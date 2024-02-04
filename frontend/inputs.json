@@ -1,0 +1,7 @@
+{
+  "SusStack": {
+    "Frontend": "https://d32bakki4aa6sp.cloudfront.net",
+    "Bucket": "susstack-uploadbucketd2c1da78-clufwkctta18",
+    "API": "https://0uekdkanje.execute-api.ap-southeast-2.amazonaws.com/"
+  }
+}
