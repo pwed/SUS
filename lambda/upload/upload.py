@@ -1,5 +1,4 @@
 import json
-import random
 import boto3
 import os
 from typing import List
@@ -12,26 +11,23 @@ s3 = boto3.client("s3")
 
 UPLOAD_BUCKET = os.environ.get("UPLOAD_BUCKET", "none")
 
-
-class presign_request:
-    filenames: List[str]
-
-
 @app.route("/presign", methods=["POST"])
 def presign(aws_event, aws_context, kwargs):
-    body: presign_request = json.loads(aws_event["body"])
+    body = json.loads(aws_event["body"])
     presigned_urls = {}
-    for filename in body["filenames"]:
+    for file in body["files"]:
         response = s3.generate_presigned_url(
             ClientMethod="put_object",
             Params={
                 "Bucket": UPLOAD_BUCKET,
-                "Key": filename,
+                "Key": file["name"],
+                "ContentType": file["type"],
+                "ContentLength": file["size"],
             },
             ExpiresIn=3600,
             HttpMethod="PUT",
         )
-        presigned_urls[filename] = response
+        presigned_urls[file["name"]] = response
     return {
         "statusCode": 200,
         "body": json.dumps(presigned_urls),

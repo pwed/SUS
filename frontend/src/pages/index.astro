@@ -27,7 +27,7 @@ const ApiUrl = import.meta.env.PUBLIC_API_URL || "{{ PUBLIC_API_URL }}";
       <strong>Drag and Drop</strong> any file you want to upload!
     </p>
     <form>
-      <input type="file" id="myFile" name="filename" />
+      <input type="file" id="myFile" name="filename" multiple/>
       <button id="uploadButton">Upload ⬆️</button>
     </form>
   </main>
@@ -87,24 +87,42 @@ const ApiUrl = import.meta.env.PUBLIC_API_URL || "{{ PUBLIC_API_URL }}";
 
   window.addEventListener("drop", dropHandler);
   window.addEventListener("dragover", dragOverHandler);
-  function uploadHandler(ev: Event) {
+  async function uploadHandler(ev: Event) {
     ev.preventDefault();
     let files = myFile.files;
-    let fileNames: string[] = [];
-    for (let i = 0; i < myFile.files.length; i++) {
-      fileNames.push(files.item(i).name);
+    interface PresignFiles {
+      size: number;
+      name: string;
+      type: string;
     }
-    console.log(
-      fetch(`${import.meta.env.PUBLIC_API_URL}/presign`, {
-        body: JSON.stringify({
-          filenames: fileNames,
-        }),
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      })
-    );
+    let presignFiles: PresignFiles[] = [];
+    for (let i = 0; i < myFile.files.length; i++) {
+      const file = files.item(i);
+      presignFiles.push({
+        name: file.name,
+        size: file.size,
+        type: file.type,
+      });
+    }
+    const request = fetch(`${import.meta.env.PUBLIC_API_URL}/presign`, {
+      body: JSON.stringify({
+        files: presignFiles,
+      }),
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+    const response = await request;
+    const data: Map<string, string> = await response.json();
+    for (let i = 0; i < myFile.files.length; i++) {
+      const filename = files.item(i).name;
+      const presignedUrl = data[filename];
+      fetch(presignedUrl, {
+        body: files.item(i),
+        method: "PUT",
+      });
+    }
   }
   uploadButton.addEventListener("click", uploadHandler);
 </script>

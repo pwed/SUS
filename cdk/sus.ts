@@ -9,8 +9,6 @@ import {
   aws_apigatewayv2_integrations as apigw_i,
   aws_s3 as s3,
   aws_lambda as lambda,
-  aws_s3_deployment,
-  aws_s3_assets,
   aws_cloudfront as cf,
   aws_cloudfront_origins as cfo,
   CfnOutput,
@@ -19,21 +17,9 @@ import { Construct } from "constructs";
 import { PythonFunction } from "@aws-cdk/aws-lambda-python-alpha";
 import { join } from "path";
 
-import { execSync } from "child_process";
-
 class SusStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
-
-    const bucket = new s3.Bucket(this, "UploadBucket", {
-      versioned: true,
-      removalPolicy: RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
-      publicReadAccess: false,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      enforceSSL: true,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-    });
 
     const frontendBucket = new s3.Bucket(this, "FrontendBucket", {});
 
@@ -46,10 +32,38 @@ class SusStack extends Stack {
       defaultRootObject: "index.html",
     });
 
+    const bucket = new s3.Bucket(this, "UploadBucket", {
+      versioned: true,
+      removalPolicy: RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+      publicReadAccess: false,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      cors: [
+        {
+          allowedMethods: [
+            s3.HttpMethods.PUT,
+            s3.HttpMethods.GET,
+            s3.HttpMethods.POST,
+            s3.HttpMethods.HEAD,
+          ],
+          allowedOrigins: [
+            "http://localhost:4321",
+            `https://${distribution.domainName}`,
+          ],
+          allowedHeaders: ["*"],
+        },
+      ],
+    });
+
     const api = new apigw.HttpApi(this, "Api", {
       corsPreflight: {
         allowMethods: [apigw.CorsHttpMethod.ANY],
-        allowOrigins: [`https://${distribution.domainName}`, "http://localhost:4321"],
+        allowOrigins: [
+          `https://${distribution.domainName}`,
+          "http://localhost:4321",
+        ],
         allowHeaders: ["*"],
       },
     });
@@ -67,7 +81,7 @@ class SusStack extends Stack {
 
     const uploadIntegration = new apigw_i.HttpLambdaIntegration(
       "UploadIntegration",
-      uploadFunction,
+      uploadFunction
     );
 
     api.addRoutes({
