@@ -90,16 +90,20 @@ class SusStack extends Stack {
       methods: [apigw.HttpMethod.POST],
     });
 
-    new CfnOutput(this, "API", {
+    new CfnOutput(this, "ApiUrl", {
       value: api.url!,
     });
 
-    new CfnOutput(this, "Frontend", {
+    new CfnOutput(this, "FrontendUrl", {
       value: `https://${distribution.domainName}`,
     });
 
-    new CfnOutput(this, "Bucket", {
+    new CfnOutput(this, "UploadBucketName", {
       value: bucket.bucketName,
+    });
+
+    new CfnOutput(this, "FrontendBucketName", {
+      value: frontendBucket.bucketName,
     });
   }
 }

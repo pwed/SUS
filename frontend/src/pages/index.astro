@@ -2,7 +2,6 @@
 import Layout from "../layouts/Layout.astro";
 
 const s3Url = import.meta.env.PUBLIC_S3_URL || "{{ PUBLIC_S3_URL }}";
-const ApiUrl = import.meta.env.PUBLIC_API_URL || "{{ PUBLIC_API_URL }}";
 ---
 
 <Layout title="SUS.">
@@ -22,58 +21,89 @@ const ApiUrl = import.meta.env.PUBLIC_API_URL || "{{ PUBLIC_API_URL }}";
     </svg>
     <h1>Simple <span class="text-gradient">Upload</span> Service</h1>
     <p class="instructions">
-      This page allows you to upload any file to <code>{s3Url}</code>
-      without any credentials.<br />
-      <strong>Drag and Drop</strong> any file you want to upload!
+      This page allows you to upload any files to <code>{s3Url}</code>
+      without any credentials.
     </p>
+    <ul class="files" id="filesList">
+      <p style="text-align: center; margin: 0;">
+        <strong>Drag and Drop</strong> any files you want to upload!
+      </p>
+    </ul>
     <form>
-      <input type="file" id="myFile" name="filename" multiple/>
-      <button id="uploadButton">Upload ⬆️</button>
+      <input type="file" id="myFile" name="filename" multiple hidden />
+      <button id="chooseFiles">Choose Files 📁</button>
+      <button id="uploadButton" style="float: right">Upload ⬆️</button>
     </form>
+    <div id="drop-modal" hidden>
+      <svg
+        class="modal-cloud"
+        xmlns="http://www.w3.org/2000/svg"
+        width="512"
+        height="512"
+        viewBox="0 0 512 512"
+      >
+        <path
+          fill="#222"
+          stroke="#666"
+          d="M398.1 233.2c0-1.2.2-2.4.2-3.6 0-65-51.8-117.6-115.7-117.6-46.1 0-85.7 27.4-104.3 67-8.1-4.1-17.2-6.5-26.8-6.5-29.5 0-54.1 21.9-58.8 50.5C57.3 235.2 32 269.1 32 309c0 50.2 40.1 91 89.5 91H224v-80h-48.2l80.2-83.7 80.2 83.6H288v80h110.3c45.2 0 81.7-37.5 81.7-83.4 0-45.9-36.7-83.2-81.9-83.3z"
+        ></path>
+      </svg>
+    </div>
   </main>
 </Layout>
 
 <script>
+  import axios from "axios";
   const myFile: HTMLInputElement = document.getElementById(
     "myFile"
   ) as HTMLInputElement;
+  const chooseFiles: HTMLButtonElement = document.getElementById(
+    "chooseFiles"
+  ) as HTMLButtonElement;
   const uploadButton: HTMLButtonElement = document.getElementById(
     "uploadButton"
   ) as HTMLButtonElement;
-  function dropHandler(ev: DragEvent) {
-    console.log("File(s) dropped");
-
-    // Prevent default behavior (Prevent file from being opened)
+  const filesList: HTMLUListElement = document.getElementById(
+    "filesList"
+  ) as HTMLUListElement;
+  const dropModal: HTMLDivElement = document.getElementById(
+    "drop-modal"
+  ) as HTMLDivElement;
+  chooseFiles.addEventListener("click", (ev: Event) => {
     ev.preventDefault();
-    myFile.files = ev.dataTransfer.files;
-
-    if (ev.dataTransfer.items) {
-      // Use DataTransferItemList interface to access the file(s)
-      [...ev.dataTransfer.items].forEach((item, i) => {
-        // If dropped items aren't files, reject them
-        if (item.kind === "file") {
-          const file = item.getAsFile();
-          console.log(`… file[${i}].name = ${file.name}`);
-        }
-      });
-    } else {
-      // Use DataTransfer interface to access the file(s)
-      [...ev.dataTransfer.files].forEach((file, i) => {
-        console.log(`… file[${i}].name = ${file.name}`);
-      });
+    myFile.click();
+  });
+  function addFileHandler() {
+    const files = myFile.files;
+    filesList.innerHTML = "";
+    for (let i = 0; i < myFile.files.length; i++) {
+      const file = files.item(i);
+      filesList.innerHTML += `<li style="list-style: none; width: 100%;">${file.name} <progress id="progress-${file.name}" style="float: right" hidden max="100" value="0">0%</progress></li>`;
     }
   }
-  function dragOverHandler(ev: Event) {
-    console.log("File(s) in drop zone");
-
-    // Prevent default behavior (Prevent file from being opened)
-    ev.preventDefault();
+  myFile.addEventListener("change", addFileHandler);
+  function dropHandler(ev: DragEvent) {
+    dropModal.hidden = true;
+    console.log("File(s) dropped");
+    myFile.files = ev.dataTransfer.files;
+    addFileHandler()
   }
 
   window.addEventListener(
     "dragover",
     function (e: DragEvent) {
       e.preventDefault();
+      dropModal.hidden = false;
+    },
+    false
+  );
+  document.body.addEventListener(
+    "dragleave",
+    function (e: DragEvent) {
+      e.preventDefault();
+      if (e.x == 0 && e.y == 0) {
+        dropModal.hidden = true;
+      }
     },
     false
   );
@@ -86,7 +116,6 @@ const ApiUrl = import.meta.env.PUBLIC_API_URL || "{{ PUBLIC_API_URL }}";
   );
 
   window.addEventListener("drop", dropHandler);
-  window.addEventListener("dragover", dragOverHandler);
   async function uploadHandler(ev: Event) {
     ev.preventDefault();
     let files = myFile.files;
@@ -103,6 +132,7 @@ const ApiUrl = import.meta.env.PUBLIC_API_URL || "{{ PUBLIC_API_URL }}";
         size: file.size,
         type: file.type,
       });
+      document.getElementById(`progress-${file.name}`).hidden = false;
     }
     const request = fetch(`${import.meta.env.PUBLIC_API_URL}/presign`, {
       body: JSON.stringify({
@@ -116,12 +146,27 @@ const ApiUrl = import.meta.env.PUBLIC_API_URL || "{{ PUBLIC_API_URL }}";
     const response = await request;
     const data: Map<string, string> = await response.json();
     for (let i = 0; i < myFile.files.length; i++) {
-      const filename = files.item(i).name;
+      const file = files.item(i);
+      const filename = file.name;
       const presignedUrl = data[filename];
-      fetch(presignedUrl, {
-        body: files.item(i),
-        method: "PUT",
-      });
+      const progressElement = document.getElementById(
+        `progress-${file.name}`
+      ) as HTMLProgressElement;
+      axios
+        .put(presignedUrl, file, {
+          onUploadProgress: (progressEvent) => {
+            const { loaded, total } = progressEvent;
+            let percentage = Math.floor((loaded * 100) / total);
+            progressElement.value = percentage;
+            progressElement.innerText = `${percentage}%`;
+          },
+          headers: {
+            "Content-Type": file.type,
+          },
+        })
+        .then(() => {
+          progressElement.replaceWith("✅");
+        });
     }
   }
   uploadButton.addEventListener("click", uploadHandler);
@@ -136,6 +181,27 @@ const ApiUrl = import.meta.env.PUBLIC_API_URL || "{{ PUBLIC_API_URL }}";
     color: white;
     font-size: 20px;
     line-height: 1.6;
+  }
+  #drop-modal {
+    z-index: 100;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: calc(100vw - 40px);
+    height: calc(100vh - 40px);
+    background: linear-gradient(
+      rgba(var(--accent-dark), 66%),
+      rgba(var(--accent-dark))
+    );
+    margin: 20px;
+    border-radius: 8px;
+  }
+  .modal-cloud {
+    position: absolute;
+    top: 50vh;
+    left: 50%;
+    transform: translatex(-50%) translateY(-50%);
+    width: 80%;
   }
   .cloud {
     position: absolute;
@@ -160,6 +226,16 @@ const ApiUrl = import.meta.env.PUBLIC_API_URL || "{{ PUBLIC_API_URL }}";
     background-size: 400%;
     background-position: 0%;
   }
+  .files {
+    margin-bottom: 2rem;
+    border: 1px solid rgba(var(--accent-dark), 25%);
+    background: linear-gradient(
+      rgba(var(--accent-light), 66%),
+      rgba(var(--accent-light), 33%)
+    );
+    padding: 1.5rem;
+    border-radius: 8px;
+  }
   .instructions {
     margin-bottom: 2rem;
     border: 1px solid rgba(var(--accent-light), 25%);
@@ -177,5 +253,20 @@ const ApiUrl = import.meta.env.PUBLIC_API_URL || "{{ PUBLIC_API_URL }}";
     color: rgb(var(--accent-light));
     border-radius: 4px;
     padding: 0.3em 0.4em;
+  }
+  button {
+    background-color: rgba(var(--accent-dark), 25%);
+    border: 1px solid rgba(var(--accent-light), 25%);
+    border-radius: 8px;
+    box-sizing: border-box;
+    color: #ffffff;
+    cursor: pointer;
+    height: 40px;
+    padding: 10px 16px;
+  }
+
+  button:hover,
+  button:focus {
+    background-color: rgba(var(--accent-dark), 66%);
   }
 </style>
